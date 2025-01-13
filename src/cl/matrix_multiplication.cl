@@ -79,7 +79,7 @@ __kernel void matrix_multiplication_local_wpt(__global float *A, __global float 
         barrier(CLK_LOCAL_MEM_FENCE);
     }
 
-    for (int w = 0; w < WORK_PER_THREAD; w++) {
-        C[current_row * N + global_row] = sum[w];
+    for (int w = 0; w < WORK_PER_THREAD; w++)
+        C[(global_col * WORK_PER_THREAD + w) * N + global_row] = sum[w];
 }
 #endif
