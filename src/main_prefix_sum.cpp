@@ -83,17 +83,40 @@ int main(int argc, char **argv)
 #endif
 
 // work-efficient prefix sum
-#if 0
+#if 1
         {
+            gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+            gpu::Context context;
+            context.init(device.device_id_opencl);
+            context.activate();
+
             std::vector<unsigned int> res(n);
+
+            ocl::Kernel prefix_sum_binary(prefix_sum_kernel, prefix_sum_kernel_length, "prefix_sum_binary");
+            ocl::Kernel prefix_sum_second_part(prefix_sum_kernel, prefix_sum_kernel_length, "prefix_sum_second_part");
+            prefix_sum_binary.compile();
+            prefix_sum_second_part.compile();
+
+            gpu::gpu_mem_32u gpu;
+            gpu.resizeN(n);
 
             timer t;
             for (int iter = 0; iter < benchmarkingIters; ++iter) {
-                // TODO
+                gpu.writeN(as.data(), as.size());
                 t.restart();
-                // TODO
+
+                for (unsigned int rate = 2; rate <= n; rate *= 2)
+                    prefix_sum_binary.exec(
+                            gpu::WorkSize(64, n / rate), gpu, n, rate);
+
+                for (unsigned int rate = n / 2; rate >= 2; rate /= 2)
+                    prefix_sum_second_part.exec(gpu::WorkSize(64, (n + rate - 1) / rate),
+                                                gpu, n, rate);
+
                 t.nextLap();
             }
+
+            gpu.readN(res.data(), as.size());
 
             std::cout << "GPU [work-efficient]: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
             std::cout << "GPU [work-efficient]: " << (n / 1000.0 / 1000.0) / t.lapAvg() << " millions/s" << std::endl;
