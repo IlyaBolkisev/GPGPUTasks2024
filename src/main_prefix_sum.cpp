@@ -61,17 +61,36 @@ int main(int argc, char **argv)
         const std::vector<unsigned int> cpu_reference = computeCPU(as);
 
 // prefix sum
-#if 0
+#if 1
         {
+            gpu::Device device = gpu::chooseGPUDevice(argc, argv);
+            gpu::Context context;
+            context.init(device.device_id_opencl);
+            context.activate();
+
+            gpu::gpu_mem_32u as_gpu, bs_gpu;
+            as_gpu.resizeN(n);
+            bs_gpu.resizeN(n);
+
+            ocl::Kernel prefix_sum(prefix_sum_kernel, prefix_sum_kernel_length, "prefix_sum");
+
+            int workGroupSize = 128;
+            gpu::WorkSize workSize(workGroupSize, n);
+
             std::vector<unsigned int> res(n);
 
             timer t;
             for (int iter = 0; iter < benchmarkingIters; ++iter) {
-                // TODO
+                as_gpu.writeN(as.data(), n);
+
                 t.restart();
-                // TODO
+                for (unsigned int bias = 1; bias < n; bias *= 2) {
+                    prefix_sum.exec(workSize, as_gpu, bs_gpu, bias, n);
+                    std::swap(as_gpu, bs_gpu);
+                }
                 t.nextLap();
             }
+            as_gpu.readN(res.data(), n);
 
             std::cout << "GPU: " << t.lapAvg() << "+-" << t.lapStd() << " s" << std::endl;
             std::cout << "GPU: " << (n / 1000.0 / 1000.0) / t.lapAvg() << " millions/s" << std::endl;
